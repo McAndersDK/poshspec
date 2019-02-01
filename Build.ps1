@@ -79,10 +79,13 @@ Properties {
     # Add items that should not be published with the module.
     $Exclude = @(
         'Release',
+        'Public',
+        'Private',
         'Tests',
         '.git*',
         '.vscode',
         '*.png',
+        '*.md',
         'poshspecdemo.ps1',
         (Split-Path $PSCommandPath -Leaf)
     )
@@ -143,24 +146,47 @@ Task Test -depends Build {
 }
 
 Task Build -depends Clean -requiredVariables PublishDir, Exclude, ModuleName {
-    if ((Get-Command -Name Step-ModuleVersion -ErrorAction SilentlyContinue).Source)
-    {
+    if ((Get-Command -Name Step-ModuleVersion -ErrorAction SilentlyContinue).Source) {
         Step-ModuleVersion -Path $ManifestPath
     }
-    else 
-    {
+    else {
         Write-Warning "'Step-ModuleVersion' command is not available."    
     }
     
-    Copy-Item $PSScriptRoot\* -Destination $PublishDir -Recurse -Exclude $Exclude
+    $filelist = Copy-Item $PSScriptRoot\* -Destination $PublishDir -Recurse -Exclude $Exclude -PassThru
+    # Merge Functions to PSM file
+    $PublicFunctions = @()
+    $AliasToExports = @()
+    "########################" | Add-Content "$PublishDir\${ModuleName}.psm1"
+    "### Public Functions ###" | Add-Content "$PublishDir\${ModuleName}.psm1"
+    "########################" | Add-Content "$PublishDir\${ModuleName}.psm1"
+    foreach ($function in (get-childitem $PSScriptRoot\Public\ -Recurse)) {
+        $PublicFunctions += $function.basename
+        Get-Content $function.fullname | Add-Content "$PublishDir\${ModuleName}.psm1"
+    }
+    "#########################" | Add-Content "$PublishDir\${ModuleName}.psm1"
+    "### Private Functions ###" | Add-Content "$PublishDir\${ModuleName}.psm1"
+    "#########################" | Add-Content "$PublishDir\${ModuleName}.psm1"
+    foreach ($function in (get-childitem $PSScriptRoot\Private\ -Recurse)) {
+        Get-Content $function.fullname | Add-Content "$PublishDir\${ModuleName}.psm1"
+    }
+    $Params = @{
+        Path = "$PublishDir\${ModuleName}.psd1"
+        FunctionsToExport = $PublicFunctions
+        #FileList = ($filelist.fullname.replace("$PublishDir\",''))
+        RootModule = "${ModuleName}.psm1"
+    }
 
     # Get contents of the ReleaseNotes file and update the copied module manifest file
     # with the release notes.
     # DO NOT USE UNTIL UPDATE-MODULEMANIFEST IS FIXED - HORRIBLY BROKEN RIGHT NOW.
-    # if ($ReleaseNotesPath) {
-    #     $releaseNotes = @(Get-Content $ReleaseNotesPath)
-    #     Update-ModuleManifest -Path $PublishDir\${ModuleName}.psd1 -ReleaseNotes $releaseNotes
-    # }
+    if($AliasToExports.count -ge 1) {
+        $Params.Add('AliasesToExport', $AliasesToExport)
+    }
+    if($ReleaseNotesPath) {
+        $Params.Add('ReleaseNotes', @(Get-Content $ReleaseNotesPath))
+    }
+    Update-ModuleManifest @params
 }
 
 Task Clean -depends Init -requiredVariables PublishDir {
@@ -173,9 +199,9 @@ Task Clean -depends Init -requiredVariables PublishDir {
 }
 
 Task Init -requiredVariables PublishDir {
-   if (!(Test-Path $PublishDir)) {
-       $null = New-Item $PublishDir -ItemType Directory
-   }
+    if (!(Test-Path $PublishDir)) {
+        $null = New-Item $PublishDir -ItemType Directory
+    }
 }
 
 Task StoreKey -requiredVariables EncryptedApiKeyPath {
@@ -205,7 +231,7 @@ function Get-NuGetApiKey($NuGetApiKey, $EncryptedApiKeyPath) {
     if (!$NuGetApiKey) {
         if (Test-Path $EncryptedApiKeyPath) {
             $storedKey = Import-Clixml $EncryptedApiKeyPath | ConvertTo-SecureString
-            $cred = New-Object -TypeName PSCredential -ArgumentList 'kh',$storedKey
+            $cred = New-Object -TypeName PSCredential -ArgumentList 'kh', $storedKey
             $NuGetApiKey = $cred.GetNetworkCredential().Password
             Write-Verbose "Retrieved encrypted NuGetApiKey from $EncryptedApiKeyPath"
         }
