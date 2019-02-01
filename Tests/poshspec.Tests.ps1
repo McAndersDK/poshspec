@@ -595,6 +595,19 @@ Describe 'Test Functions' {
             }
         }
 
+        
+        Context 'Sql' {
+
+            $results = Sql "server60" "Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=ReportDB;Data Source=server60" State { Should Match "Closed" }
+
+            It "Should return the correct test Name" {
+                $results.Name | Should Be "Sql property 'State' for 'server60' at 'Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=ReportDB;Data Source=server60' Should Match `"Closed`""
+            }
+
+            It "Should return the correct test Expression" {
+                $results.Expression | Should Be "New-Object System.Data.SqlClient.SqlConnection 'Integrated Security=SSPI;Persist Security Info=False;Initial Catalog=ReportDB;Data Source=server60' | Select-Object -ExpandProperty 'State' | Should Match `"Closed`""
+            }
+        }
     }
 }
 
