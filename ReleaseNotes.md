@@ -1,3 +1,12 @@
+# Version 2.2.3
+
+* Module Build now merge all function into PSM1.
+* Added Functions for
+  * VMNetworkAdapter
+  * VMNetworkAdapterVLAN
+  * Ping
+  * SQL
+
 # Version 2.2.1
 
 * Added PropertyExpression to `Get-PoshspecParams`
